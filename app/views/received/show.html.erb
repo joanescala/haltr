@@ -18,6 +18,19 @@
 </div>
 
 
+<% if @invoice.invoice_img -%>
+
+<div id="invoice_img" class="container1">
+  <div class="container2">
+
+    <div class="colu1">
+      <%= render :template => 'invoice_imgs/show' %>
+    </div>
+
+    <div class="colu2">
+
+<% end -%>
+
 <div id="invoice_wrapper">
   <div class="ribbon ribbon-<%= @invoice.state %>">
     <span><%=h l("state_#{@invoice.state}").capitalize %></span>
@@ -32,6 +45,14 @@
     </div>
   </div>
 </div>
+
+<% if @invoice.invoice_img -%>
+    </div>
+
+  </div>
+</div>
+<% end -%>
+
 
 <%= render :partial => 'events/list', locals: {events: @invoice.visible_events} %>
 <%= render :partial => 'invoices/issued_invoice_list_other' if @invoice.is_a? IssuedInvoice %>

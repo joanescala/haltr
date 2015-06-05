@@ -17,23 +17,43 @@
 </div>
 <!--final menu rapid-->
 
-<div id="invoice_wrapper">
-  <div class="ribbon ribbon-<%= @invoice.state %>">
-    <% if @invoice.is_a? InvoiceTemplate %>
-      <span><%=h l("label_invoice_template") %></span>
-    <% else %>
-      <span><%=h l("state_#{@invoice.state}").capitalize %></span>
-    <% end %>
-  </div>
-  <div id="workspace1" class="haltrinvoice">
-    <div id="workspace2">
-      <div id="col1">
-      <%= render :partial=>'invoices/invoice' %>
-      <%= link_to_attachments @invoice, thumbnails: false, author: false %>
-      </div>
+<% if @invoice.invoice_img -%>
+
+<div id="invoice_img" class="container1">
+  <div class="container2">
+
+    <div class="colu1">
+        <%=  image_tag(project_invoice_img_path(@invoice.invoice_img, project_id: @project)) %>
     </div>
+
+    <div class="colu2">
+
+<% end -%>
+
+      <div id="invoice_wrapper">
+        <div class="ribbon ribbon-<%= @invoice.state %>">
+          <% if @invoice.is_a? InvoiceTemplate %>
+            <span><%=h l("label_invoice_template") %></span>
+          <% else %>
+            <span><%=h l("state_#{@invoice.state}").capitalize %></span>
+          <% end %>
+        </div>
+        <div id="workspace1" class="haltrinvoice">
+          <div id="workspace2">
+            <div id="col1">
+              <%= render :partial=>'invoices/invoice' %>
+              <%= link_to_attachments @invoice, thumbnails: false, author: false %>
+            </div>
+          </div>
+        </div>
+      </div>
+
+<% if @invoice.invoice_img -%>
+    </div>
+
   </div>
 </div>
+<% end -%>
 
 <% if @invoice.send_original? %>
   <p>* <%= l(:label_will_send_original) -%></p>

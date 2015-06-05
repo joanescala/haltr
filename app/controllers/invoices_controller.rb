@@ -718,7 +718,7 @@ class InvoicesController < ApplicationController
   end
 
   def find_invoices
-    @invoices = invoice_class.find_all_by_id(params[:id] || params[:ids])
+    @invoices = Invoice.find_all_by_id(params[:id] || params[:ids])
     raise ActiveRecord::RecordNotFound if @invoices.empty?
     raise Unauthorized unless @invoices.collect {|i| i.project }.uniq.size == 1
     @project = @invoices.first.project
@@ -894,24 +894,41 @@ class InvoicesController < ApplicationController
 
   def import
     params[:issued] ||= '1'
+    transport=:uploaded
     if request.post?
       file = params[:file]
       @invoice = nil
       if file && file.size > 0
         md5 = `md5sum #{file.path} | cut -d" " -f1`.chomp
-        user_or_company = User.current.admin? ? @project.company : User.current
-        @invoice = Invoice.create_from_xml(
-          file, user_or_company, md5,'uploaded',nil,
-          params[:issued] == '1',
-          params['keep_original'] != 'false',
-          params['validate'] != 'false'
-        )
-      end
-      if @invoice and ["true","1"].include?(params[:send_after_import])
-        begin
-          Haltr::Sender.send_invoice(@invoice, User.current)
-          @invoice.queue
-        rescue
+        case file.content_type
+        when /xml/
+          user_or_company = User.current.admin? ? @project.company : User.current
+          @invoice = Invoice.create_from_xml(
+            file, user_or_company, md5,'uploaded',nil,
+            params[:issued] == '1',
+            params['keep_original'] != 'false',
+            params['validate'] != 'false'
+          )
+          if @invoice and ["true","1"].include?(params[:send_after_import])
+            begin
+              Haltr::Sender.send_invoice(@invoice, User.current)
+              @invoice.queue
+            rescue
+            end
+          end
+        when /pdf/
+          @invoice = params[:issued] == '1' ? IssuedInvoice.new : ReceivedInvoice.new
+          @invoice.project   = @project
+          @invoice.state     = :processing_pdf
+          @invoice.transport = transport
+          @invoice.md5       = md5
+          @invoice.original  = file.read
+          @invoice.invoice_format = 'pdf'
+          @invoice.save!(validate: false)
+          Event.create(:name=>'processing_pdf',:invoice=>@invoice)
+          Haltr::SendPdfToWs.send(@invoice)
+        else
+          raise "unknown file type: '#{file.content_type}' for #{file.path}"
         end
       end
       respond_to do |format|

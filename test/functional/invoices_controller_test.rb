@@ -105,17 +105,41 @@ class InvoicesControllerTest < ActionController::TestCase
     @request.session[:user_id] = 2
   end
 
-  test 'import invoice' do
+  test 'import xml invoice' do
     post :import, {
-      file:       fixture_file_upload('/documents/invoice_facturae32_issued.xml'),
+      file:       fixture_file_upload('/documents/invoice_facturae32_issued.xml','text/xml'),
       commit:     'Importar',
-      project_id: 'onlinestore'
+      project_id: 'onlinestore',
+      issued:     '1'
     }
     p=Project.find(2)
     assert User.current.allowed_to?(:import_invoices,p), "user #{User.current.login} has not import_invoices permission in project #{p.name}"
     assert_response :found
-    invoice = IssuedInvoice.find_by_number '767'
+    assert invoice = IssuedInvoice.find_by_number('767'), "should find imported invoice"
     assert invoice.valid?, invoice.errors.messages.to_s
+    assert !invoice.modified_since_created?
+    assert invoice.original
+  end
+
+  test 'import pdf invoice' do
+
+    stub_request(:post, "http://localhost:3000/api/v1/transactions")
+    .to_return(:status => 200,
+               :body => "",
+               :headers => {})
+
+    post :import, {
+      file:       fixture_file_upload('/documents/invoice_pdf_signed.pdf','application/pdf'),
+      commit:     'Importar',
+      project_id: 'onlinestore',
+      issued:     '1'
+    }
+    p=Project.find(2)
+    assert User.current.allowed_to?(:import_invoices,p), "user #{User.current.login} has not import_invoices permission in project #{p.name}"
+    assert_response :found
+    assert invoice = IssuedInvoice.last
+    assert !invoice.valid?
+    assert_equal "processing_pdf", invoice.state
     assert !invoice.modified_since_created?
     assert invoice.original
   end

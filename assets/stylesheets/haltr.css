@@ -237,6 +237,36 @@ div.action-linked_to_mine #companies {
 .companyid {
   font-size: 10px;
 }
+
+#invoice_img {
+  clear: left;
+  float: left;
+  width: 150%;
+  margin-left: -25%;
+}
+#invoice_img .container2 {
+  float: left;
+  position: relative;
+  right: 50%;
+  width: 100%;
+}
+#invoice_img .colu1 {
+  float:left;
+  left: 52%;
+  position: relative;
+  width: 46%;
+}
+#invoice_img .colu2 {
+  float:left;
+  left: 56%;
+  overflow: hidden;
+  position: relative;
+  width: 46%;
+}
+.colu1 img {
+  border: 1px solid #666666;
+}
+
 div.attachments span.size {
   font-size: 1em;
 }
@@ -261,4 +291,41 @@ span#send_info {
   position: absolute;
   top: -13px;
   right: 0px;
+}
+
+.rectangle-txt {
+  position: absolute;
+  padding: 0;
+  background: rgba(234, 252, 23, .2);
+  z-index: 2;
+}
+.rectangle-txt:hover {
+  border: 1px solid;
+  text-align: center;
+}
+.rectangle-txt:hover:before {
+  content: attr(data-tag);
+  color: white;
+  display: block;
+  background: green;
+  position: absolute;
+  width: 100px;
+  top: 20px;
+  left: -7px;
+  right: -7px;
+  padding: 5px;
+  z-index: 2;
+}
+.rectangle-txt:hover:after{
+  content: "";
+  position: absolute;
+  display: block;
+  width: 0;
+  height: 0;
+  border: solid 12px transparent;
+  border-bottom-color: green;
+  top: 0;
+  left: 50%;
+  margin-left: -10px;
+  z-index: 2;
 }

@@ -49,11 +49,14 @@ resources :projects do
   match 'ccc2iban' => 'clients#ccc2iban', :via => :get, :as => :ccc2iban
   match 'events/file/:id' => 'events#file', :via => :get, :as => :event_file
   resources :quotes, :only => [:index, :new, :create]
+  resources :invoice_imgs, :only => [:show]
   match 'invoices/add_attachment' => 'invoices#add_attachment', :via => :post
   resources :import_errors, :only => [:index, :show, :destroy]
   match 'import_errors' => 'import_errors#destroy', :via => :delete, :as => 'project_import_errors'
   match 'invoices/add_comment' => 'invoices#add_comment', :via => :post
 end
+resources :invoice_imgs, :only => [:create]
+
 resources :clients do
   resources :people, :only => [:index, :new, :create]
 end
