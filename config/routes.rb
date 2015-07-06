@@ -4,6 +4,7 @@
 #        %w(xml json).include? params[:format]
 
 resources :events
+match 'events/file/:id' => 'events#file', :via => :get, :as => :event_file
 
 match '/clients/check_cif/:id' => 'clients#check_cif', :via => :get
 match '/clients/link_to_profile/:id' => 'clients#link_to_profile', :via => :get
@@ -47,13 +48,13 @@ resources :projects do
   match 'invoices', :controller => 'invoices', :action => 'destroy', :via => :delete
   match 'check_iban' => 'companies#check_iban', :via => :get, :as => :check_iban
   match 'ccc2iban' => 'clients#ccc2iban', :via => :get, :as => :ccc2iban
-  match 'events/file/:id' => 'events#file', :via => :get, :as => :event_file
   resources :quotes, :only => [:index, :new, :create]
   resources :invoice_imgs, :only => [:show]
   match 'invoices/add_attachment' => 'invoices#add_attachment', :via => :post
   resources :import_errors, :only => [:index, :show, :destroy]
   match 'import_errors' => 'import_errors#destroy', :via => :delete, :as => 'project_import_errors'
   match 'invoices/add_comment' => 'invoices#add_comment', :via => :post
+  match 'invoices/facturae' => 'invoices#import_facturae', :via => :post
 end
 resources :invoice_imgs, :only => [:create]
 

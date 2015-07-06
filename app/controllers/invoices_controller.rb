@@ -14,7 +14,7 @@ class InvoicesController < ApplicationController
 
   PUBLIC_METHODS = [:by_taxcode_and_num,:view,:download,:mail,:logo,:haltr_sign]
 
-  before_filter :find_project_by_project_id, :only => [:index,:new,:create,:send_new_invoices,:download_new_invoices,:update_payment_stuff,:new_invoices_from_template,:reports,:report_channel_state,:report_invoice_list,:create_invoices,:update_taxes,:import]
+  before_filter :find_project_by_project_id, :only => [:index,:new,:create,:send_new_invoices,:download_new_invoices,:update_payment_stuff,:new_invoices_from_template,:reports,:report_channel_state,:report_invoice_list,:create_invoices,:update_taxes,:import,:import_facturae]
   before_filter :find_invoice, :only => [:edit,:update,:mark_accepted_with_mail,:mark_accepted,:mark_refused_with_mail,:mark_refused,:duplicate_invoice,:base64doc,:show,:send_invoice,:legal,:amend_for_invoice,:original,:validate,:show_original, :mark_as_accepted, :mark_as, :add_comment]
   before_filter :find_invoices, :only => [:context_menu,:bulk_download,:bulk_mark_as,:bulk_send,:destroy,:bulk_validate]
   before_filter :find_payment, :only => [:destroy_payment]
@@ -37,7 +37,7 @@ class InvoicesController < ApplicationController
   before_filter :check_for_company, :except => PUBLIC_METHODS
 
   skip_before_filter :verify_authenticity_token, :only => [:base64doc]
-  accept_api_auth :import, :number_to_id, :update, :show
+  accept_api_auth :import, :import_facturae, :number_to_id, :update, :show, :index
 
   def index
     sort_init 'invoices.created_at', 'desc'
@@ -104,18 +104,28 @@ class InvoicesController < ApplicationController
       render :template => 'common/error', :layout => 'base', :status => 403, :formats => [:html]
       return
     end
+
+    case params[:format]
+    when 'csv', 'pdf'
+      @limit = Setting.issues_export_limit.to_i
+    when 'xml', 'json'
+      @offset, @limit = api_offset_and_limit
+    else
+      @limit = per_page_option
+    end
+
+    @invoice_count = invoices.count
+    @invoice_pages = Paginator.new self, @invoice_count, @limit, params['page']
+    @offset ||= @invoice_pages.offset
+    @invoices =  invoices.find(:all,
+                               :order => sort_clause,
+                               :include => [:client],
+                               :limit  =>  @limit,
+                               :offset =>  @offset)
+
     respond_to do |format|
-      format.html do
-        @invoice_count = invoices.count
-        @invoice_pages = Paginator.new self, @invoice_count,
-          per_page_option,
-          params['page']
-        @invoices =  invoices.find :all,
-          :order => sort_clause,
-          :include => [:client],
-          :limit  =>  @invoice_pages.items_per_page,
-          :offset =>  @invoice_pages.current.offset
-      end
+      format.html
+      format.api
       format.csv do
         @invoices = invoices.order(sort_clause)
       end
@@ -360,7 +370,11 @@ class InvoicesController < ApplicationController
     @format = params["format"]
     respond_to do |format|
       format.html
-      format.json { render json: @invoice, status: :ok }
+      format.api do
+        # Force "json" if format is emtpy
+        # Used in refresher.js to check invoice status
+        params[:format] ||= 'json'
+      end
       format.pdf do
         @is_pdf = true
         @debug = params[:debug]
@@ -410,15 +424,43 @@ class InvoicesController < ApplicationController
   end
 
   def show_original
-    @invoice.update_attribute(:has_been_read, true) if @invoice.is_a? ReceivedInvoice
-    if @invoice.invoice_format == "pdf"
-      render :template => 'received/show_pdf'
+    case @invoice.original
+    when /<SchemaVersion>3\.2<\/SchemaVersion>/
+      template = 'invoices/visor_face_32.xsl.erb'
+    when /<SchemaVersion>3\.2\.1<\/SchemaVersion>/
+      template = 'invoices/visor_face_321.xsl.erb'
     else
-      doc  = Nokogiri::XML(@invoice.original)
-      # TODO: received/facturae31.xsl.erb and received/facturae30.xsl.erb templates
-      xslt = Nokogiri::XSLT(render_to_string(:template=>'received/facturae32.xsl.erb',:layout=>false))
-      @out  = xslt.transform(doc)
-      render :template => 'received/show_with_xsl'
+      redirect_to action: 'show', id: @invoice
+      return
+    end
+    @is_pdf = (params[:format] == 'pdf')
+    @invoices_not_sent = InvoiceDocument.find(:all,:conditions => ["client_id = ? and state = 'new'",@client.id]).sort
+    @invoices_sent = InvoiceDocument.find(:all,:conditions => ["client_id = ? and state = 'sent'",@client.id]).sort
+    @invoices_closed = InvoiceDocument.find(:all,:conditions => ["client_id = ? and state = 'closed'",@client.id]).sort
+    @js = ExportChannels[@client.invoice_format]['javascript'] rescue nil
+    @autocall = params[:autocall]
+    @autocall_args = params[:autocall_args]
+    @format = params["format"]
+    doc   = Nokogiri::XML(@invoice.original)
+    xslt  = Nokogiri::XSLT(render_to_string(:template=>template,:layout=>false))
+    @out  = xslt.transform(doc)
+    respond_to do |format|
+      format.html do
+        render :template => 'invoices/show_with_xsl'
+      end
+      format.pdf do
+        @debug = params[:debug]
+        render :pdf => @invoice.pdf_name_without_extension,
+          :disposition => 'attachment',
+          :layout => "invoice.html",
+          :template=>"invoices/show_with_xsl",
+          :formats => :html,
+          :show_as_html => params[:debug],
+          :margin => {:top => 20,
+            :bottom => 20,
+            :left   => 30,
+            :right  => 20}
+      end
     end
   end
 
@@ -707,12 +749,14 @@ class InvoicesController < ApplicationController
     @client = @invoice.client || Client.new(:name=>"unknown",:project=>@invoice.project)
     @project = @invoice.project
     @company = @project.company
-    if @client.taxcode[0...2].downcase == @client.country
-      taxcode2 = @client.taxcode[2..-1]
-    else
-      taxcode2 = "#{@client.country}#{@client.taxcode}"
+    if @invoice.client
+      if @client.taxcode[0...2].downcase == @client.country
+        taxcode2 = @client.taxcode[2..-1]
+      else
+        taxcode2 = "#{@client.country}#{@client.taxcode}"
+      end
+      @external_company = ExternalCompany.where('taxcode in (?, ?)', @client.taxcode, taxcode2).first
     end
-    @external_company = ExternalCompany.where('taxcode in (?, ?)', @client.taxcode, taxcode2).first
   rescue ActiveRecord::RecordNotFound
     render_404
   end
@@ -892,6 +936,34 @@ class InvoicesController < ApplicationController
     end
   end
 
+  # Used in API only - facturae in POST body
+  def import_facturae
+    # Make sure that API users get used to set this content type
+    # as it won't trigger Rails' automatic parsing of the request body for parameters
+    unless request.content_type == 'application/octet-stream'
+      render :nothing => true, :status => 406
+      return
+    end
+
+    begin
+      @invoice = Invoice.create_from_xml(
+        request.raw_post,
+        User.current,
+        Digest::MD5.hexdigest(request.raw_post),
+        'api'
+      )
+      respond_to do |format|
+        format.api {
+          render action: 'show', status: :created, location: invoice_path(@invoice)
+        }
+      end
+    rescue => e
+      @error_messages = [e.to_s]
+      render :template => 'common/error_messages.api', :status => :unprocessable_entity, :layout => nil
+    end
+  end
+
+  # Used in form POST - facturae in multipart POST 'file' field
   def import
     params[:issued] ||= '1'
     transport=:uploaded

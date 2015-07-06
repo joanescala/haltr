@@ -86,7 +86,7 @@ Redmine::Plugin.register :haltr do
       { :clients   => [:index, :edit, :check_cif, :ccc2iban],
         :people    => [:index, :edit],
         :invoices  => [:index, :show, :legal, :download_new_invoices, :reports, :report_channel_state, :report_invoice_list,
-                       :context_menu, :show_original, :number_to_id],
+                       :context_menu, :show_original, :number_to_id, :edit],
         :received  => [:index, :show, :show_original, :legal, :context_menu],
         :companies => [:my_company,:bank_info, :linked_to_mine, :check_iban],
         :payments  => [:index, :n19],
@@ -121,7 +121,7 @@ Redmine::Plugin.register :haltr do
         :mandates => [:index,:new,:show,:create,:edit,:update,:destroy,:signed_doc] }, :require => :member
 
     permission :import_invoices,
-      { :invoices => [:import],
+      { :invoices => [:import,:import_facturae],
         :received => [:import],
         :import_errors => [:index, :show, :destroy, :context_menu] },
       :require => :member
@@ -142,6 +142,11 @@ Redmine::Plugin.register :haltr do
     permission :use_invoice_attachments, { :attachments => :upload}
 
     permission :add_invoice_notes, { :invoices => :add_comment }
+
+    permission :manage_external_companies, {
+      :external_companies => [:index, :new, :create, :edit, :update, :destroy, :csv_import],
+      :dir3_entities => [:index, :new, :create, :edit, :update, :destroy, :csv_import]
+    }
 
     # Loads permisons from config/channels.yml
     ExportChannels.permissions.each do |permission,actions|

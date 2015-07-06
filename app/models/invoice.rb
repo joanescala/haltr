@@ -141,20 +141,8 @@ class Invoice < ActiveRecord::Base
     "#{l(:label_invoice)}-#{number.gsub('/','')}" rescue "factura-___"
   end
 
-  def recipient_people
-    self.client.people.find(:all,:order=>'last_name ASC',:conditions=>['send_invoices_by_mail = true'])
-  end
-
   def recipient_emails
-    mails = self.recipient_people.collect do |person|
-      person.email if person.email and !person.email.blank?
-    end
-    mails << self.client.email if self.client and self.client.email and !self.client.email.blank?
-    # additional mails hook. it returns an array
-    mails = mails + Redmine::Hook.call_hook(:model_invoice_additional_recipient_emails, :invoice=>self)
-    replace_mails = Redmine::Hook.call_hook(:model_invoice_replace_recipient_emails, :invoice=>self)
-    mails = replace_mails if replace_mails.any?
-    mails.uniq.compact
+    client.recipient_emails
   end
 
   def terms_description
@@ -378,6 +366,12 @@ class Invoice < ActiveRecord::Base
     end
   end
 
+  def issuer_transaction_reference=(value)
+    invoice_lines.each do |line|
+      line.issuer_transaction_reference=value
+    end
+  end
+
   def tax_per_line?(tax_name)
     return false if invoice_lines.first.nil?
     first_tax = invoice_lines.first.taxes.collect {|t| t if t.name == tax_name}.compact.first
@@ -470,7 +464,11 @@ _INV
 
   def self.create_from_xml(raw_invoice,user_or_company,md5,transport,from=nil,issued=nil,keep_original=true,validate=true)
 
-    raw_xml           = raw_invoice.read
+    if raw_invoice.is_a? String
+      raw_xml = raw_invoice
+    else
+      raw_xml = raw_invoice.read
+    end
     doc               = Nokogiri::XML(raw_xml)
     doc_no_namespaces = doc.dup.remove_namespaces!
     facturae_version  = doc.at_xpath("//FileHeader/SchemaVersion")
@@ -709,7 +707,7 @@ _INV
     elsif raw_invoice.respond_to? :path              # File (tests)
       invoice.file_name = File.basename(raw_invoice.path)
     else
-      invoice.file_name = "can't get filename from #{raw_invoice.class}"
+      invoice.file_name = "invoice.xml"
     end
 
     if invoice_format =~ /facturae/
@@ -965,19 +963,23 @@ _INV
   end
 
   def has_article_codes?
-    invoice_lines.any? {|l| l.article_code.present? }
+    return @has_article_codes unless @has_article_codes.nil?
+    @has_article_codes = invoice_lines.any? {|l| l.article_code.present? }
   end
 
   def has_delivery_note_numbers?
-    invoice_lines.any? {|l| l.delivery_note_number.present? }
+    return @has_delivery_note_numbers unless @has_delivery_note_numbers.nil?
+    @has_delivery_note_numbers = invoice_lines.any? {|l| l.delivery_note_number.present? }
   end
 
   def has_line_discounts?
-    invoice_lines.sum(&:discount_percent) > 0
+    return @has_line_discounts unless @has_line_discounts.nil?
+    @has_line_discounts = (invoice_lines.sum(&:discount_percent) > 0)
   end
 
   def has_line_charges?
-    invoice_lines.sum(&:charge) > 0
+    return @has_line_charges unless @has_line_charges.nil?
+    @has_line_charges = (invoice_lines.sum(&:charge) > 0)
   end
 
   protected
