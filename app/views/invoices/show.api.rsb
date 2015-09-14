@@ -21,7 +21,7 @@ api.invoice do
   api.due_date @invoice.due_date
 
   # subtotal
-  api.subttotal @invoice.subtotal.to_f
+  api.subtotal @invoice.subtotal.to_f
 
   # taxes
   api.array :taxes do
@@ -37,10 +37,12 @@ api.invoice do
   # total = importe
   api.total @invoice.total.to_f
 
-      api.currency @invoice.currency
+  api.currency @invoice.currency
   api.download_legal_url @invoice.last_sent_file_path if @invoice.is_a? IssuedInvoice
   api.created_at @invoice.created_at
   api.updated_at @invoice.updated_at
+  api.state_updated_at @invoice.state_updated_at
+
   api.array :lines do
     @invoice.invoice_lines.each do |line|
       api.line do

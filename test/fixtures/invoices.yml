@@ -324,3 +324,4 @@ i15:
   type: ReceivedInvoice
   project_id: 2
   state: "processing_pdf"
+  client_email_override: override@example.com

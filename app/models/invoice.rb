@@ -142,7 +142,11 @@ class Invoice < ActiveRecord::Base
   end
 
   def recipient_emails
-    client.recipient_emails
+    unless client_email_override.blank?
+      client_email_override.split(/[,; ]/)
+    else
+      client.recipient_emails
+    end
   end
 
   def terms_description
@@ -452,6 +456,7 @@ _INV
   end
 
   def modified_since_created?
+    return false if new_record?
     updated_at > created_at
   end
 
@@ -527,7 +532,6 @@ _INV
     fa_bank_code      = Haltr::Utils.get_xpath(doc,xpaths[:fa_bank_code])
     fa_clauses        = Haltr::Utils.get_xpath(doc,xpaths[:fa_clauses])
     fa_payment_method = Haltr::Utils.get_xpath(doc,xpaths[:fa_payment_method])
-    fa_payment_method = Haltr::Utils.payment_method_from_facturae(fa_payment_method)
 
     invoice, client, client_role, company, user = nil
 
@@ -584,6 +588,16 @@ _INV
       end
     end
 
+    # if it is an issued invoice, and
+    #    the client allready exists, and
+    #    this client has different email than this invoice, then
+    # save the email address to the invoice (overrides client email) 
+    if client_role == "buyer" and client
+      client_email = Haltr::Utils.get_xpath(doc,xpaths["buyer_email"])
+      if client_email and client_email != client.email
+        invoice.client_email_override = client_email
+      end
+    end
 
     # if passed issued param, check if it should be an IssuedInvoice or a ReceivedInvoice
     unless issued.nil?
@@ -640,19 +654,83 @@ _INV
       logger.info "created new client \"#{client_name}\" with cif #{client_taxcode} for company #{company.name}. time=#{Time.now}"
     end
 
+    dir3 = nil
     doc.xpath(xpaths[:dir3s]).each do |line|
-      case Haltr::Utils.get_xpath(line, xpaths[:dir3_role])
+      role = Haltr::Utils.get_xpath(line, xpaths[:dir3_role])
+      code = Haltr::Utils.get_xpath(line, xpaths[:dir3_code])
+      case role
       when '01'
-        invoice.oficina_comptable  = Haltr::Utils.get_xpath(line, xpaths[:dir3_code])
+        invoice.oficina_comptable  = code
         invoice.oficina_comptable_name = Haltr::Utils.get_xpath(line, xpaths[:dir3_name])
       when '02'
-        invoice.organ_gestor       = Haltr::Utils.get_xpath(line, xpaths[:dir3_code])
+        invoice.organ_gestor       = code
       when '03'
-        invoice.unitat_tramitadora = Haltr::Utils.get_xpath(line, xpaths[:dir3_code])
+        invoice.unitat_tramitadora = code
+        invoice.unitat_tramitadora_name = Haltr::Utils.get_xpath(line, xpaths[:dir3_name])
       when '04'
-        invoice.organ_proponent    = Haltr::Utils.get_xpath(line, xpaths[:dir3_code])
+        invoice.organ_proponent    = code
       else
         # unknown role
+      end
+      # save unknown Dir3 entities
+      begin
+        # dir3 with other code or unexisting one
+        if (dir3 and dir3.code != code) or Dir3Entity.find_by_code(code).nil?
+          country = Haltr::Utils.get_xpath(line, xpaths[:dir3_country])
+          country = SunDawg::CountryIsoTranslater.translate_standard(country,"alpha3","alpha2").downcase rescue country
+          dir3 = Dir3Entity.create!(
+            code:       code,
+            name:       Haltr::Utils.get_xpath(line, xpaths[:dir3_name]),
+            address:    Haltr::Utils.get_xpath(line, xpaths[:dir3_address]),
+            postalcode: Haltr::Utils.get_xpath(line, xpaths[:dir3_postcode]),
+            city:       Haltr::Utils.get_xpath(line, xpaths[:dir3_town]),
+            province:   Haltr::Utils.get_xpath(line, xpaths[:dir3_province]),
+            country:    country
+          )
+        end
+        dir3 = Dir3Entity.find_by_code(code)
+        # and add relation to ExternalCompany if exist
+        ec = ExternalCompany.find_by_taxcode client.taxcode
+        if ec
+          case role
+          when '01'
+            unless ec.oficines_comptables =~ /#{code}/
+              if ec.oficines_comptables.blank?
+                ec.update_attribute :oficines_comptables, code
+              else
+                ec.update_attribute :oficines_comptables, "#{ec.oficines_comptables},#{code}"
+              end
+            end
+          when '02'
+            unless ec.organs_gestors =~ /#{code}/
+              if ec.organs_gestors.blank?
+                ec.update_attribute :organs_gestors, code
+              else
+                ec.update_attribute :organs_gestors, "#{ec.organs_gestors},#{code}"
+              end
+            end
+          when '03'
+            unless ec.unitats_tramitadores =~ /#{code}/
+              if ec.unitats_tramitadores.blank?
+                ec.update_attribute :unitats_tramitadores, code
+              else
+                ec.update_attribute :unitats_tramitadores, "#{ec.unitats_tramitadores},#{code}"
+              end
+            end
+          when '04'
+            unless ec.organs_proponents =~ /#{code}/
+              if ec.organs_proponents.blank?
+                ec.update_attribute :organs_proponents, code
+              else
+                ec.update_attribute :organs_proponents, "#{ec.organs_proponents},#{code}"
+              end
+            end
+          else
+            # unknown role
+          end
+        end
+      rescue ActiveRecord::RecordInvalid
+        raise $! if Rails.env == 'test'
       end
     end
 
@@ -726,7 +804,6 @@ _INV
     invoice.payment_method_text = Haltr::Utils.get_xpath(doc,xpaths[:payment_method_text])
 
     line_file_reference = nil
-    line_ponumber = nil
     line_r_contract_reference = nil
 
     # invoice lines
@@ -757,6 +834,7 @@ _INV
              :issuer_transaction_reference => Haltr::Utils.get_xpath(line,xpaths[:i_transaction_ref]),
              :sequence_number              => Haltr::Utils.get_xpath(line,xpaths[:sequence_number]),
              :delivery_note_number         => line_delivery_note_number,
+             :ponumber     => Haltr::Utils.get_xpath(line,xpaths[:ponumber]),
            )
       # invoice taxes. Known taxes are described at config/taxes.yml
       line.xpath(*xpaths[:line_taxes]).each do |line_tax|
@@ -786,16 +864,18 @@ _INV
         il.charge_reason = Haltr::Utils.get_xpath(line_charges.first,xpaths[:line_charge_reason])
       end
       line_file_reference ||= Haltr::Utils.get_xpath(line,xpaths[:file_reference])
-      line_ponumber       ||= Haltr::Utils.get_xpath(line,xpaths[:ponumber])
       line_r_contract_reference ||= Haltr::Utils.get_xpath(line,xpaths[:r_contract_reference])
       invoice.invoice_lines << il
     end
 
-    # Assume just one file_reference, ponumber and
+    # Assume just one file_reference and
     # receiver_contract_reference per Invoice
     invoice.file_reference = line_file_reference
-    invoice.ponumber = line_ponumber
     invoice.receiver_contract_reference = line_r_contract_reference
+
+    if !invoice.has_line_ponumber? and invoice.invoice_lines.any? and invoice.invoice_lines.first.ponumber.present?
+      invoice.ponumber = invoice.invoice_lines.first.ponumber
+    end
 
     # attachments
     to_attach = []
@@ -888,6 +968,9 @@ _INV
         client.set_if_blank(:bic,bic)
       end
       client.save!
+      # Use any of our bank_infos to receive the payment, let say the last one,
+      # because we dont have this information in the facturae xml
+      self.bank_info = company.bank_infos.last
     elsif (is_a? ReceivedInvoice and debit?) or (is_a? IssuedInvoice and transfer?)
       # account is our account, where we should be charged
       # or         our account, where client should transfer
@@ -982,6 +1065,13 @@ _INV
     @has_line_charges = (invoice_lines.sum(&:charge) > 0)
   end
 
+  def has_line_ponumber?
+    return @has_line_ponumber unless @has_line_ponumber.nil?
+    @has_line_ponumber = (invoice_lines.collect {|l|
+      l.ponumber
+    }.uniq.size > 1)
+  end
+
   protected
 
   def increment_counter
@@ -1069,7 +1159,7 @@ _INV
 
   # we do not want to update timpestamps (updated_at) if it has not been really modified
   def should_record_timestamps?
-    (self.changes.keys.map(&:to_sym) - [:state,:has_been_read]).present? && super
+    (self.changes.keys.map(&:to_sym) - [:state,:has_been_read,:state_updated_at]).present? && super
   end
 
   # translations for accepts_nested_attributes_for

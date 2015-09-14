@@ -30,6 +30,7 @@ class Redmine::ApiTest::InvoicesTest < Redmine::ApiTest::Base
     assert_equal 'Company1', invoice['company']['name']
     assert_equal 'Client1', invoice['client']['name']
     assert_equal 1.0, invoice['lines'].first['quantity']
+    assert_equal 100.0, invoice['taxes'].first['amount']
 
     # TODO emulate call from javascript
 #    get '/invoices/6', nil, {"Accept" => "application/json", "X-Requested-With" => "XMLHttpRequest"}.merge(credentials('jsmith'))
@@ -54,6 +55,14 @@ class Redmine::ApiTest::InvoicesTest < Redmine::ApiTest::Base
     get '/projects/onlinestore/invoices.json', {}, credentials('jsmith')
     assert_response :success
     assert_equal '2013-02-05', JSON(response.body)['invoices'].first['due_date']
+  end
+
+  test 'invoice index with state_updated_at filter' do
+    i=Invoice.find(4)
+    i.update_attribute(:state,:sent)
+    get "/projects/onlinestore/invoices.json?state_updated_at_from=#{Date.today}", {}, credentials('jsmith')
+    assert_response :success
+    assert_equal Date.today, JSON(response.body)['invoices'].first['state_updated_at'].to_date
   end
 
   test 'delete' do
