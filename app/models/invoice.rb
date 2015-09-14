@@ -112,9 +112,9 @@ class Invoice < ActiveRecord::Base
   # Importe bruto.
   # Suma total de importes brutos de los detalles de la factura
   def gross_subtotal(tax_type=nil)
-    (lines_with_tax(tax_type).collect { |line|
-      line.gross_amount.to_money(currency)
-    }.sum).to_money(currency)
+    Haltr::Utils.to_money(lines_with_tax(tax_type).collect { |line|
+      Haltr::Utils.to_money(line.gross_amount, currency)
+    }.sum, currency)
   end
 
   # only used in svefaktura: LineExtensionTotalAmount
@@ -262,9 +262,9 @@ class Invoice < ActiveRecord::Base
   # Base imponible a precio de mercado
   # Total Importe Bruto + Recargos - Descuentos Globales
   def taxable_base(tax_type=nil)
-    (lines_with_tax(tax_type).collect {|line|
-      line.gross_amount.to_money(currency)
-    }.sum).to_money(currency) - discount_amount(tax_type)
+    Haltr::Utils.to_money(lines_with_tax(tax_type).collect {|line|
+      Haltr::Utils.to_money(line.gross_amount, currency)
+    }.sum, currency) - discount_amount(tax_type)
   end
 
   def discount_amount(tax_type=nil)
@@ -503,6 +503,7 @@ _INV
     i_period_start   = Haltr::Utils.get_xpath(doc,xpaths[:invoicing_period_start])
     i_period_end     = Haltr::Utils.get_xpath(doc,xpaths[:invoicing_period_end])
     invoice_total    = Haltr::Utils.get_xpath(doc,xpaths[:invoice_total])
+    invoice_total = Haltr::Utils.to_money(invoice_total, currency)
     invoice_import   = Haltr::Utils.get_xpath(doc,xpaths[:invoice_import])
     invoice_due_date = Haltr::Utils.get_xpath(doc,xpaths[:invoice_due_date])
     discount_percent = Haltr::Utils.get_xpath(doc,xpaths[:discount_percent])
@@ -741,9 +742,9 @@ _INV
       :date             => invoice_date,
       :invoicing_period_start => i_period_start,
       :invoicing_period_end   => i_period_end,
-      :total            => invoice_total.to_money(currency),
+      :total            => invoice_total,
       :currency         => currency,
-      :import           => invoice_import.to_money(currency),
+      :import           => Haltr::Utils.to_money(invoice_import, currency),
       :due_date         => invoice_due_date,
       :project          => company.project,
       :terms            => "custom",
@@ -758,7 +759,7 @@ _INV
       :charge_amount    => charge,
       :charge_reason    => charge_reason,
       :accounting_cost  => accounting_cost,
-      :payments_on_account => payments_on_account.to_money(currency),
+      :payments_on_account => Haltr::Utils.to_money(payments_on_account, currency),
       :fa_person_type    => fa_person_type,
       :fa_residence_type => fa_residence_type,
       :fa_taxcode        => fa_taxcode,
@@ -933,6 +934,22 @@ _INV
       invoice.save(:validate=>false)
     end
     logger.info "created new invoice with id #{invoice.id} for company #{company.name}. time=#{Time.now}"
+
+    # warn user if calculated total != xml total
+    invoice.reload
+    if invoice_total != invoice.total
+      ImportError.create(
+        filename:      (invoice.file_name rescue ""),
+        import_errors: I18n.t(:invoice_import_mismatch, original: invoice_total.dollars, calculated: invoice.total.dollars),
+        original:      raw_xml,
+        project:       company.project,
+      )
+      Event.create(
+        :name    => 'import_errors',
+        :notes   => [:invoice_import_mismatch, {original: invoice_total.dollars, calculated: invoice.total.dollars}],
+        :invoice => invoice
+      )
+    end
     return invoice
   rescue
     if company and company.project

@@ -199,6 +199,41 @@ module Haltr
         facturae_codes[code]
       end
 
+      def float_parse(value)
+        value = value.to_s.strip
+        val = case value
+              when /^-?[0-9]+$/
+                value
+              when /^-?[0-9]+\.[0-9]+$/
+                value
+              when /^-?[0-9]+,[0-9]+$/
+                value.gsub(/,/,'.')
+              when /^-?[0-9\.]+,[0-9]+$/
+                value.gsub(/\./,'').gsub(/,/,'.')
+              when /^-?[0-9,]+\.[0-9]+$/
+                value.gsub(/,/,'')
+              when /^-?[0-9,]+'[0-9]+$/
+                value.gsub(/,/,'').gsub(/'/,'.')
+              when /^-?[0-9.]+'[0-9]+$/
+                value.gsub(/\./,'').gsub(/'/,'.')
+              else
+                '0'
+              end
+        val.to_f
+      end
+
+      def to_money(import, currency=nil)
+        currency ||= Setting.plugin_haltr['default_currency']
+        currency = Money::Currency.new(currency)
+        import = float_parse(import.to_s)
+        import = BigDecimal.new(import.to_s) * currency.subunit_to_unit
+        if import % 1 != 0
+          # apply banker's rounding
+          import = import.round(0, BigDecimal::ROUND_HALF_EVEN)
+        end
+        Money.new(import.to_i, currency)
+      end
+
     end
   end
 end
