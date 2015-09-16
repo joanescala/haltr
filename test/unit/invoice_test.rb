@@ -371,12 +371,12 @@ class InvoiceTest < ActiveSupport::TestCase
     assert_equal 150,    il.quantity
     # taxes
     assert_equal 2,      il.taxes.size
-    assert_equal 'IVA',  il.taxes[0].name
-    assert_equal 10.0,   il.taxes[0].percent
-    assert_equal 'AA',   il.taxes[0].category
-    assert_equal 'IRPF', il.taxes[1].name
-    assert_equal 21.0,   il.taxes[1].percent
-    assert_equal 'S',    il.taxes[1].category
+    assert_equal 'IVA',  il.taxes[1].name
+    assert_equal 10.0,   il.taxes[1].percent
+    assert_equal 'AA',   il.taxes[1].category
+    assert_equal 'IRPF', il.taxes[0].name
+    assert_equal(-21.0,  il.taxes[0].percent)
+    assert_equal 'S',    il.taxes[0].category
     # email override lluis@ingent.net, instead of client1@email.com
     assert_equal 'lluis@ingent.net', invoice.client_email_override
   end
@@ -606,6 +606,16 @@ class InvoiceTest < ActiveSupport::TestCase
     # Not overrided
     assert_nil invoices(:i13).client_email_override
     assert_equal ["person1@example.com", "mail@client1.com"], invoices(:i13).recipient_emails
+  end
+
+  test 'it checks round_before_sum on company' do
+    i = invoices(:i15)
+    assert_equal false, i.company.round_before_sum
+    assert_equal 1828.07, i.tax_amount.dollars
+    assert_equal 1828.07, i.tax_amount(i.taxes.first).dollars
+    i.company.round_before_sum = true
+    assert_equal 1828.06, i.tax_amount.dollars
+    assert_equal 1828.06, i.tax_amount(i.taxes.first).dollars
   end
 
 end

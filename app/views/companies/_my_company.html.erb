@@ -8,6 +8,7 @@
     <p class="col span-1-de-2">
     <%= f.label_for_field :name, :label => l('name_or_company') %>
     <%= f.text_field :name, :required => true, :no_label => true %>
+      <p style="float: right;"><%= check_box(:company, :persontype, {:no_label=>true}, 'F', 'J') %> <%= l(:self_employed) %></p>
     </p>
   </div>
   <div class="seccio grup">
@@ -101,7 +102,18 @@
         <%= link_to_add_association l(:button_add_tax), f, :taxes, 'data-association-insertion-node' => '#taxes', 'data-association-insertion-method' => 'append' %>
       </span>
       </p>
-      <p><%= check_box(:company, :persontype, {:no_label=>true}, 'F', 'J') %> <%= l(:self_employed) %></p>
+    </div>
+  </fieldset>
+
+  <fieldset class="tabular box">
+    <legend><%=l(:label_rounding_plural)%></legend>
+    <div class="seccio grup">
+      <p class="col span-1-de-3">
+      <%= f.select :rounding_method, Company.rounding_methods %>
+      </p>
+      <p class="col span-1-de-3" style="float: left; clear: left; margin-left: 0px;">
+      <span>&nbsp;<%= check_box(:company, :round_before_sum, {:no_label=>true}) %> <%= l(:round_before_sum) %></span>
+      </p>
     </div>
   </fieldset>
 
