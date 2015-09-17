@@ -64,6 +64,7 @@ resources :invoice_imgs, :only => [:create]
 
 resources :clients do
   resources :people, :only => [:index, :new, :create]
+  resources :client_offices, :only => [:index, :new, :create, :edit, :update, :destroy]
 end
 
 resources :people

@@ -659,3 +659,6 @@ fr:
   bankers_rounding: "Banker's rounding"
   truncate_rounding: 'Truncate'
   round_before_sum: 'Round before sum'
+  label_client_office_new: Nouvelle succursale
+  label_client_office_plural: Succursales
+  label_client_office: Succursale

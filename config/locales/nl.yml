@@ -659,3 +659,6 @@ nl:
   bankers_rounding: "Banker's rounding"
   truncate_rounding: 'Truncate'
   round_before_sum: 'Round before sum'
+  label_client_office_new: New branch
+  label_client_office_plural: Branches
+  label_client_office: Branch
