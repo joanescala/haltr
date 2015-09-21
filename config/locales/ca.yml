@@ -677,6 +677,6 @@ ca:
   bankers_rounding: 'Arrodoniment bancari'
   truncate_rounding: 'Truncar decimals'
   round_before_sum: 'Arrodonir abans de sumar'
-  label_client_office_new: Nova sucursal
-  label_client_offices: Sucursals
-  label_client_office: Sucursal
+  label_client_office_new: Nova seu
+  label_client_offices: Seus
+  label_client_office: Seu
