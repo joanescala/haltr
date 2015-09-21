@@ -675,5 +675,5 @@ gl:
   truncate_rounding: 'Truncar'
   round_before_sum: 'Redondear antes de sumar'
   label_client_office_new: Nueva sucursal
-  label_client_office_plural: Sucursales
+  label_client_offices: Sucursales
   label_client_office: Sucursal

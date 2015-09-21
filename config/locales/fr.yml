@@ -660,5 +660,5 @@ fr:
   truncate_rounding: 'Truncate'
   round_before_sum: 'Round before sum'
   label_client_office_new: Nouvelle succursale
-  label_client_office_plural: Succursales
+  label_client_offices: Succursales
   label_client_office: Succursale

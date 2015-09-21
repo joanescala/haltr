@@ -678,5 +678,5 @@ ca:
   truncate_rounding: 'Truncar decimals'
   round_before_sum: 'Arrodonir abans de sumar'
   label_client_office_new: Nova sucursal
-  label_client_office_plural: Sucursals
+  label_client_offices: Sucursals
   label_client_office: Sucursal
