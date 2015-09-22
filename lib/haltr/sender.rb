@@ -85,6 +85,55 @@ module Haltr
         end
         FileUtils.mv(invoice_file.path, dest)
       end
+      # copy invoice to target received invoice's if target exists and
+      # has "receive_internal_invoices" checked (issue #5335)
+      target = Company.find_by_taxcode(invoice.client.taxcode)
+      if target and target.receive_internal_invoices?
+        begin
+          client = target.project.clients.find_by_taxcode invoice.client.taxcode
+          client ||= Client.create!(
+            project_id:     target.project_id,
+            name:           target.name,
+            taxcode:        target.taxcode,
+            address:        target.address,
+            city:           target.city,
+            postalcode:     target.postalcode,
+            province:       target.province,
+            website:        target.website,
+            email:          target.email,
+            country:        target.country,
+            currency:       target.currency,
+            invoice_format: target.invoice_format,
+            schemeid:       target.schemeid,
+            endpointid:     target.endpointid,
+            language:       user.language,
+            allowed:        nil
+          )
+          # copy issued invoice attributes
+          ReceivedInvoice.create!(
+            invoice.attributes.update(
+              state:     :received,
+              project:   target.project,
+              client:    client,
+              bank_info: nil,
+              invoice_lines: invoice.invoice_lines.collect {|il|
+                new_il = il.dup
+                new_il.taxes = il.taxes.collect {|t|
+                  Tax.new(
+                    name:     t.name,
+                    percent:  t.percent,
+                    category: t.category,
+                    comment:  t.comment
+                  )
+                }
+                new_il
+              }
+            )
+          )
+        rescue
+          Event
+        end
+      end
     end
   end
 
