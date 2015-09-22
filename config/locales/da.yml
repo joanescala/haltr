@@ -655,3 +655,4 @@ da:
   label_client_office_new: Ny filial
   label_client_offices: Filials
   label_client_office: Filial
+  field_receive_internal_invoices: Receive invoices from portal

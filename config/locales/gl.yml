@@ -670,3 +670,4 @@ gl:
   label_client_office_new: Nueva sucursal
   label_client_offices: Sucursales
   label_client_office: Sucursal
+  field_receive_internal_invoices: Receive invoices from portal

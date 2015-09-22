@@ -652,3 +652,4 @@ nl:
   label_client_office_new: New branch
   label_client_offices: Branches
   label_client_office: Branch
+  field_receive_internal_invoices: Receive invoices from portal
