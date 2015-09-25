@@ -668,7 +668,7 @@ da:
   field_receive_internal_invoices: Receive invoices from portal
   amend_total: Complete
   amend_partial: Partial
-  field_amend_reason_code: Rectification reason
+  field_amend_reason: Rectification reason
   amend_reason_01: "Invoice number"
   amend_reason_02: "Invoice serial number"
   amend_reason_03: "Issue date"
